@@ -1,0 +1,1146 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>The prayer tree</title>
+<meta name="description" content="Leave a spoken prayer of up to 30 seconds on a shared tree, and listen to the prayers others have left.">
+<meta property="og:title" content="The prayer tree">
+<meta property="og:description" content="Leave a spoken prayer on a shared tree, and listen to the prayers others have left.">
+<meta name="theme-color" content="#E3E8DF" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#161C15" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ctext x='50%25' y='54%25' dominant-baseline='middle' text-anchor='middle' font-family='monospace' font-size='56' fill='%23B3392C'%3E%C2%A7%3C/text%3E%3C/svg%3E">
+<link rel="preload" href="/fonts/spline-sans-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<style>
+  /* Spectral and Spline Sans Mono, both SIL Open Font License 1.1 */
+  @font-face { font-family: "Spectral"; font-style: normal; font-weight: 400; font-display: swap; src: url(/fonts/spectral-latin-400-normal.woff2) format("woff2"); }
+  @font-face { font-family: "Spectral"; font-style: normal; font-weight: 500; font-display: swap; src: url(/fonts/spectral-latin-500-normal.woff2) format("woff2"); }
+  @font-face { font-family: "Spectral"; font-style: italic; font-weight: 400; font-display: swap; src: url(/fonts/spectral-latin-400-italic.woff2) format("woff2"); }
+  @font-face { font-family: "Spline Sans Mono"; font-style: normal; font-weight: 400; font-display: block; src: url(/fonts/spline-sans-mono-latin-400-normal.woff2) format("woff2"); }
+  @font-face { font-family: "Spline Sans Mono"; font-style: normal; font-weight: 600; font-display: block; src: url(/fonts/spline-sans-mono-latin-600-normal.woff2) format("woff2"); }
+
+  :root {
+    --mist: #E3E8DF;
+    --card: #EEF1EA;
+    --leaf-dark: #3F5537;
+    --leaf-light: #7E9672;
+    --bark: #5E4A3A;
+    --ground: #8A8F7E;
+    --ribbon: #B3392C;
+    --ribbon-soft: rgba(179, 57, 44, 0.16);
+    --ribbon-ink: #FFF8F4;
+    --ink: #1E251C;
+    --ink-soft: #566151;
+    --line: rgba(30, 37, 28, 0.15);
+    --shadow: 0 18px 40px -26px rgba(22, 34, 20, 0.55);
+    --serif: "Spectral", Georgia, "Times New Roman", serif;
+    --mono: "Spline Sans Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+    color-scheme: light dark;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --mist: #161C15;
+      --card: #1E261C;
+      --leaf-dark: #4E6A45;
+      --leaf-light: #8DA680;
+      --bark: #9C8570;
+      --ground: #5F6858;
+      --ribbon: #E0614F;
+      --ribbon-soft: rgba(224, 97, 79, 0.22);
+      --ribbon-ink: #1B120F;
+      --ink: #E2E7DC;
+      --ink-soft: #9AA492;
+      --line: rgba(226, 231, 220, 0.16);
+      --shadow: 0 18px 40px -24px rgba(0, 0, 0, 0.7);
+    }
+  }
+
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: var(--mist);
+    color: var(--ink);
+    font: 400 17px/1.5 var(--serif);
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  #tree {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    display: block;
+    touch-action: manipulation;
+  }
+  #tree.pointing { cursor: pointer; }
+
+  header {
+    position: fixed;
+    top: max(18px, env(safe-area-inset-top));
+    left: max(20px, env(safe-area-inset-left));
+    max-width: 30ch;
+    pointer-events: none;
+  }
+  h1 {
+    margin: 0;
+    font-size: 1.55rem;
+    font-weight: 500;
+    line-height: 1.15;
+    letter-spacing: -0.01em;
+  }
+  .lede {
+    margin: 0.45rem 0 0;
+    color: var(--ink-soft);
+    font-size: 0.98rem;
+    line-height: 1.45;
+  }
+  .count {
+    margin: 0.5rem 0 0;
+    font-style: italic;
+    color: var(--ink-soft);
+    font-size: 0.98rem;
+  }
+  body.embedded .lede { display: none; }
+  body.embedded h1 { font-size: 1.25rem; }
+
+  #dock {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    padding: 0 16px max(18px, env(safe-area-inset-bottom));
+    pointer-events: none;
+  }
+  #dock > * { pointer-events: auto; }
+
+  .controls {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 10px;
+  }
+
+  button {
+    font: inherit;
+    color: inherit;
+    cursor: pointer;
+  }
+  button:disabled { cursor: default; opacity: 0.55; }
+  :focus-visible {
+    outline: 2px solid var(--ribbon);
+    outline-offset: 3px;
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5em;
+    min-height: 44px;
+    padding: 0.62rem 1.15rem;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    background: var(--card);
+    font-size: 1rem;
+    font-weight: 500;
+    line-height: 1;
+    white-space: nowrap;
+  }
+  .btn:hover:not(:disabled) { border-color: var(--ink-soft); }
+  .btn.primary {
+    background: var(--ribbon);
+    border-color: transparent;
+    color: var(--ribbon-ink);
+  }
+  .btn.primary:hover:not(:disabled) { filter: brightness(1.06); border-color: transparent; }
+  .btn .knot {
+    font-family: var(--mono);
+    font-weight: 600;
+    font-size: 1.05em;
+    line-height: 1;
+  }
+  .link {
+    background: none;
+    border: 0;
+    padding: 0.35rem 0.2rem;
+    color: var(--ink-soft);
+    font-size: 0.98rem;
+    text-decoration: underline;
+    text-decoration-color: var(--line);
+    text-underline-offset: 3px;
+  }
+  .link:hover { color: var(--ink); text-decoration-color: currentColor; }
+
+  .panel {
+    position: relative;
+    width: min(440px, 100%);
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    padding: 18px 20px 16px;
+    box-shadow: var(--shadow);
+  }
+  .panel[hidden] { display: none; }
+  .panel h2 {
+    margin: 0 2rem 0.35rem 0;
+    font-size: 1.2rem;
+    font-weight: 500;
+    line-height: 1.25;
+  }
+  .panel p { margin: 0 0 0.9rem; }
+  .panel .note { color: var(--ink-soft); font-size: 0.95rem; }
+  .panel .when { margin: 0 2rem 0.6rem 0; font-style: italic; color: var(--ink-soft); }
+  .panel .actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+  }
+  .panel .actions .push { margin-left: auto; }
+  .close {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border: 0;
+    background: none;
+    color: var(--ink-soft);
+    display: grid;
+    place-items: center;
+  }
+  .close:hover { color: var(--ink); background: var(--line); }
+
+  .player {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 0 0 0.85rem;
+  }
+  .play {
+    flex: none;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    border: 0;
+    background: var(--ribbon);
+    color: var(--ribbon-ink);
+    display: grid;
+    place-items: center;
+  }
+  .bar {
+    position: relative;
+    flex: 1;
+    height: 4px;
+    border-radius: 2px;
+    background: var(--line);
+    overflow: hidden;
+  }
+  .bar > span {
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 0;
+    background: var(--ribbon);
+  }
+  .time {
+    flex: none;
+    min-width: 6.2ch;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    color: var(--ink-soft);
+    font-size: 0.95rem;
+  }
+
+  .timer {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+    margin: 0.1rem 0 0.4rem;
+  }
+  .timer .big {
+    font-size: 2.6rem;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+  }
+  .timer .of { color: var(--ink-soft); }
+  .meter {
+    margin: 0 0 1rem;
+    font-family: var(--mono);
+    font-size: 0.95rem;
+    line-height: 1;
+    letter-spacing: 0.02em;
+    color: var(--ribbon);
+    white-space: pre;
+    overflow: hidden;
+    height: 1em;
+  }
+  .rec-dot {
+    display: inline-block;
+    width: 0.55rem;
+    height: 0.55rem;
+    border-radius: 50%;
+    background: var(--ribbon);
+    margin-right: 0.45rem;
+    vertical-align: 0.12em;
+  }
+  .btn.primary .rec-dot { background: var(--ribbon-ink); }
+  .error-text { color: var(--ribbon); }
+
+  .toast {
+    padding: 0.55rem 1rem;
+    border-radius: 999px;
+    background: var(--ink);
+    color: var(--mist);
+    font-size: 0.95rem;
+    box-shadow: var(--shadow);
+  }
+  .toast[hidden] { display: none; }
+
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  @media (max-width: 560px) {
+    body { font-size: 16px; }
+    h1 { font-size: 1.35rem; }
+    .lede { font-size: 0.93rem; }
+    .btn { padding: 0.6rem 1rem; }
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .panel:not([hidden]) { animation: rise 220ms ease-out; }
+    @keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+  }
+</style>
+</head>
+<body>
+<canvas id="tree" aria-hidden="true"></canvas>
+
+<header>
+  <h1>The prayer tree</h1>
+  <p class="lede">Speak a prayer of up to 30 seconds and it will hang somewhere on this tree, where anyone who visits can listen.</p>
+  <p class="count" id="count" aria-live="polite">Gathering the prayers…</p>
+</header>
+
+<div id="dock">
+  <div class="toast" id="toast" role="status" hidden></div>
+  <section class="panel" id="panel" hidden aria-live="polite"></section>
+  <div class="controls" id="controls">
+    <button class="btn primary" id="leave"><span class="knot" aria-hidden="true">§</span>Leave a prayer</button>
+    <button class="btn" id="random" disabled>Listen to a prayer</button>
+    <button class="link" id="mine" hidden>Find yours</button>
+  </div>
+</div>
+
+<nav class="sr-only" aria-label="Prayers on the tree">
+  <ul id="prayer-list"></ul>
+</nav>
+
+<noscript><p style="position:fixed;top:40%;width:100%;text-align:center">The prayer tree needs JavaScript to grow.</p></noscript>
+
+<script src="/tree.js"></script>
+<script>
+(() => {
+  "use strict";
+
+  const MAX_SECONDS = 30;
+  const MIN_SECONDS = 1;
+  const POLL_MS = 45000;
+  const params = new URLSearchParams(location.search);
+  const ADMIN = params.has("admin");
+  const EMBEDDED = params.has("embed") || window.self !== window.top;
+  if (EMBEDDED) document.body.classList.add("embedded");
+
+  const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)");
+
+  // ---------- storage helpers (browser storage can be unavailable) ----------
+  const store = {
+    get(key, fallback) {
+      try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; } catch { return fallback; }
+    },
+    set(key, value) {
+      try { localStorage.setItem(key, JSON.stringify(value)); } catch {}
+    },
+  };
+  const mine = new Set(store.get("prayer-tree:mine", []));
+
+  // ---------- the tree ----------
+  const T = PrayerTree.build();
+  const { W, H, groundY, kind, ch, dens, slots, HEAVY, LIGHT, KINDS } = T;
+  const rnd = PrayerTree.mulberry32((Date.now() & 0xffffffff) >>> 0);
+
+  const canvas = document.getElementById("tree");
+  const ctx = canvas.getContext("2d");
+  let colors = {};
+  function readColors() {
+    const cs = getComputedStyle(document.documentElement);
+    const v = (n) => cs.getPropertyValue(n).trim();
+    colors = {
+      [KINDS.LEAF_DARK]: v("--leaf-dark"),
+      [KINDS.LEAF_LIGHT]: v("--leaf-light"),
+      [KINDS.BARK]: v("--bark"),
+      [KINDS.GROUND]: v("--ground"),
+      ribbon: v("--ribbon"),
+      ribbonSoft: v("--ribbon-soft"),
+      ink: v("--ink"),
+    };
+  }
+  readColors();
+  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { readColors(); });
+
+  // layout
+  let dpr = 1, vw = 0, vh = 0, fs = 12, cw = 7, rowH = 13, ox = 0, oy = 0;
+  let cwRatio = 0.6;
+  const ROW_RATIO = 1.12;
+  const FONT = (size, weight = 400) => `${weight} ${size}px "Spline Sans Mono", ui-monospace, Menlo, Consolas, monospace`;
+
+  function measure() {
+    ctx.font = FONT(100);
+    cwRatio = ctx.measureText("M").width / 100 || 0.6;
+  }
+
+  const header = document.querySelector("header");
+  const dock = document.getElementById("dock");
+  const controlsEl = document.getElementById("controls");
+
+  function layout() {
+    dpr = Math.min(window.devicePixelRatio || 1, 2.5);
+    vw = window.innerWidth; vh = window.innerHeight;
+    canvas.width = Math.round(vw * dpr);
+    canvas.height = Math.round(vh * dpr);
+    const hb = header.getBoundingClientRect();
+    const bottom = vw < 420 ? 128 : 86; // room for the buttons; fixed so the tree never jumps
+    const fit = (top) => {
+      const availW = vw - 24, availH = vh - top - bottom;
+      const size = Math.max(4, Math.min(availW / (W * cwRatio), availH / (H * ROW_RATIO), 24));
+      const tw = W * cwRatio * size, th = H * ROW_RATIO * size;
+      return { size, tw, th, x: (vw - tw) / 2, y: top + Math.max(0, (availH - th) / 2) };
+    };
+    let top = 16;
+    let f = fit(top);
+    // only push the tree down if the header would actually sit on the canopy
+    if (f.x < hb.right + 8) { top = hb.bottom + 10; f = fit(top); }
+    fs = f.size; cw = cwRatio * fs; ox = f.x;
+    // on tall, narrow screens let the rows breathe rather than leaving the screen empty
+    const availH = vh - top - bottom;
+    rowH = Math.min(fs * 1.65, Math.max(fs * ROW_RATIO, (availH * 0.94) / H));
+    oy = top + Math.max(0, (availH - rowH * H) / 2);
+  }
+
+  // per-row strings for each layer, rebuilt only when a row changes
+  const LAYERS = [KINDS.GROUND, KINDS.BARK, KINDS.LEAF_DARK, KINDS.LEAF_LIGHT];
+  let rowStrings = [];
+  const dirty = new Set();
+  let occupied = new Map(); // cell index -> prayer
+
+  function buildRow(y) {
+    const out = {};
+    for (const L of LAYERS) {
+      let s = "", any = false;
+      for (let x = 0; x < W; x++) {
+        const i = y * W + x;
+        if (kind[i] === L && !occupied.has(i)) { s += ch[i]; if (ch[i] !== " ") any = true; }
+        else s += " ";
+      }
+      out[L] = any ? s.replace(/\s+$/, "") : "";
+    }
+    rowStrings[y] = out;
+  }
+  function rebuildAll() { for (let y = 0; y < H; y++) buildRow(y); }
+
+  // sway: the crown moves most, the roots not at all
+  function sway(y, t) {
+    if (reduceMotion.matches) return 0;
+    const h = Math.max(0, (groundY - y) / groundY);
+    const gust = 0.55 + 0.45 * Math.sin(t * 0.17) * Math.sin(t * 0.41 + 1.3);
+    const wave = Math.sin(t * 0.62 + y * 0.075) * 0.75 + Math.sin(t * 1.55 + y * 0.23) * 0.18;
+    return cw * 1.05 * Math.pow(h, 1.7) * wave * gust;
+  }
+
+  // shimmer: a few leaves turn every tick
+  function shimmer() {
+    if (reduceMotion.matches) return;
+    const n = 6 + Math.floor(rnd() * 6);
+    for (let k = 0; k < n; k++) {
+      const i = slots[Math.floor(rnd() * slots.length)];
+      if (occupied.has(i)) continue;
+      ch[i] = PrayerTree.pick(rnd, dens[i] < 0.18 ? LIGHT : HEAVY);
+      dirty.add(Math.floor(i / W));
+    }
+  }
+
+  // falling leaves
+  const falling = [];
+  let nextFall = 0;
+  function spawnLeaf(t) {
+    const i = slots[Math.floor(rnd() * slots.length)];
+    const y = Math.floor(i / W);
+    if (y < 14) return;
+    falling.push({
+      x: i % W, y, vy: 0.9 + rnd() * 0.7, phase: rnd() * 6.28,
+      c: PrayerTree.pick(rnd, LIGHT), born: t,
+    });
+  }
+
+  // ---------- prayers ----------
+  let prayers = [];
+  let selectedId = null, hoverId = null, focusId = null;
+  let arrival = null; // { id, start }
+
+  function place() {
+    occupied = new Map();
+    const N = slots.length;
+    const sorted = prayers.slice().sort((a, b) => a.t - b.t);
+    for (const p of sorted) {
+      let idx = Math.abs(p.slot | 0) % N, tries = 0;
+      while (occupied.has(slots[idx]) && tries < N) { idx = (idx + 97) % N; tries++; }
+      p.cell = slots[idx];
+      occupied.set(p.cell, p); // with a full tree, the newest prayer takes the leaf
+    }
+    rebuildAll();
+    renderList();
+    updateCount();
+  }
+
+  function ribbonPos(p, t) {
+    const x = p.cell % W, y = Math.floor(p.cell / W);
+    return { x: ox + x * cw + sway(y, t) + cw / 2, y: oy + y * rowH + rowH / 2, row: y };
+  }
+
+  // ---------- drawing ----------
+  let last = 0, lastShimmer = 0;
+  function frame(now) {
+    const t = now / 1000;
+    if (now - lastShimmer > 140) { shimmer(); lastShimmer = now; }
+    for (const y of dirty) buildRow(y);
+    dirty.clear();
+
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, vw, vh);
+    ctx.textBaseline = "top";
+    ctx.font = FONT(fs);
+
+    for (let y = 0; y < H; y++) {
+      const rs = rowStrings[y];
+      if (!rs) continue;
+      const dx = sway(y, t);
+      const py = oy + y * rowH;
+      for (const L of LAYERS) {
+        if (!rs[L]) continue;
+        ctx.fillStyle = colors[L];
+        ctx.fillText(rs[L], ox + dx, py);
+      }
+    }
+
+    // falling leaves
+    if (!reduceMotion.matches) {
+      if (t > nextFall) { if (falling.length < 4) spawnLeaf(t); nextFall = t + 1.6 + rnd() * 2.6; }
+      ctx.fillStyle = colors[KINDS.LEAF_LIGHT];
+      for (let k = falling.length - 1; k >= 0; k--) {
+        const f = falling[k];
+        const age = t - f.born;
+        const fy = f.y + age * f.vy;
+        if (fy >= groundY - 0.4) { falling.splice(k, 1); continue; }
+        const fx = f.x + Math.sin(age * 1.3 + f.phase) * 1.4 + age * 0.25;
+        ctx.globalAlpha = Math.min(1, age * 2) * Math.min(1, (groundY - fy) / 3);
+        ctx.fillText(f.c, ox + fx * cw + sway(Math.floor(fy), t), oy + fy * rowH);
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    // ribbons
+    const bold = FONT(fs * 1.2, 600);
+    for (const p of occupied.values()) {
+      if (arrival && arrival.id === p.id) continue;
+      const pos = ribbonPos(p, t);
+      const active = p.id === selectedId;
+      const hot = active || p.id === hoverId || p.id === focusId;
+      if (active || mine.has(p.id)) {
+        const pulse = active && !reduceMotion.matches ? 0.5 + 0.5 * Math.sin(t * 4) : 0.6;
+        ctx.fillStyle = colors.ribbonSoft;
+        ctx.beginPath();
+        ctx.arc(pos.x, pos.y, cw * (active ? 1.3 + pulse * 0.7 : 1.1), 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.font = hot ? FONT(fs * 1.6, 600) : bold;
+      ctx.fillStyle = colors.ribbon;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("§", pos.x, pos.y + fs * 0.04);
+      if (p.id === focusId) {
+        ctx.strokeStyle = colors.ribbon;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(pos.x, pos.y, cw * 1.6 + 3, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      ctx.textAlign = "left";
+      ctx.textBaseline = "top";
+    }
+
+    // a new prayer drifts down onto its leaf
+    if (arrival) {
+      const p = prayers.find((q) => q.id === arrival.id);
+      const dur = 1.9;
+      const k = Math.min(1, (t - arrival.start) / dur);
+      if (!p || k >= 1) arrival = null;
+      else {
+        const to = ribbonPos(p, t);
+        const ease = 1 - Math.pow(1 - k, 3);
+        const fromY = -fs * 2;
+        const x = to.x + Math.sin(k * 9) * cw * 2.2 * (1 - k);
+        const y = fromY + (to.y - fromY) * ease;
+        ctx.font = FONT(fs * (1.45 + (1 - k) * 0.6), 600);
+        ctx.fillStyle = colors.ribbon;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText("§", x, y);
+        ctx.textAlign = "left";
+        ctx.textBaseline = "top";
+      }
+    }
+
+    requestAnimationFrame(frame);
+  }
+
+  // ---------- picking a ribbon ----------
+  function nearest(clientX, clientY) {
+    const t = performance.now() / 1000;
+    const reach = Math.max(cw * 2.2, 18);
+    let best = null, bestD = reach * reach;
+    for (const p of occupied.values()) {
+      const pos = ribbonPos(p, t);
+      const d = (pos.x - clientX) ** 2 + (pos.y - clientY) ** 2;
+      if (d < bestD) { bestD = d; best = p; }
+    }
+    return best;
+  }
+  canvas.addEventListener("pointermove", (e) => {
+    if (e.pointerType !== "mouse") return;
+    const p = nearest(e.clientX, e.clientY);
+    hoverId = p ? p.id : null;
+    canvas.classList.toggle("pointing", !!p);
+  });
+  canvas.addEventListener("pointerleave", () => { hoverId = null; canvas.classList.remove("pointing"); });
+  canvas.addEventListener("click", (e) => {
+    if (recorder.busy()) return;
+    const p = nearest(e.clientX, e.clientY);
+    if (p) openPrayer(p, true);
+  });
+
+  // ---------- words ----------
+  function ago(ts) {
+    const s = Math.max(0, (Date.now() - ts) / 1000);
+    if (s < 60) return "just now";
+    const m = Math.round(s / 60);
+    if (m < 60) return m === 1 ? "a minute ago" : `${m} minutes ago`;
+    const h = Math.round(m / 60);
+    if (h < 24) return h === 1 ? "an hour ago" : `${h} hours ago`;
+    const d = Math.round(h / 24);
+    if (d === 1) return "yesterday";
+    if (d < 14) return `${d} days ago`;
+    return "on " + new Date(ts).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+  }
+  const clock = (sec) => {
+    sec = Math.max(0, Math.floor(sec || 0));
+    return `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}`;
+  };
+
+  const countEl = document.getElementById("count");
+  const randomBtn = document.getElementById("random");
+  const mineBtn = document.getElementById("mine");
+  function updateCount() {
+    const n = prayers.length;
+    countEl.textContent = n === 0 ? "No prayers yet. Leave the first one." : n === 1 ? "1 prayer hangs here." : `${n.toLocaleString()} prayers hang here.`;
+    randomBtn.disabled = n === 0;
+    mineBtn.hidden = !prayers.some((p) => mine.has(p.id));
+  }
+
+  const listEl = document.getElementById("prayer-list");
+  function renderList() {
+    const frag = document.createDocumentFragment();
+    const sorted = prayers.slice().sort((a, b) => b.t - a.t);
+    for (const p of sorted) {
+      const li = document.createElement("li");
+      const b = document.createElement("button");
+      b.textContent = `${mine.has(p.id) ? "Your prayer" : "A prayer"}, left ${ago(p.t)}, ${Math.round(p.dur || 0)} seconds`;
+      b.addEventListener("focus", () => { focusId = p.id; });
+      b.addEventListener("blur", () => { if (focusId === p.id) focusId = null; });
+      b.addEventListener("click", () => openPrayer(p, true));
+      li.appendChild(b);
+      frag.appendChild(li);
+    }
+    listEl.replaceChildren(frag);
+  }
+
+  // ---------- toast ----------
+  const toastEl = document.getElementById("toast");
+  let toastTimer = 0;
+  function toast(msg) {
+    toastEl.textContent = msg;
+    toastEl.hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { toastEl.hidden = true; }, 4200);
+  }
+
+  // ---------- panel ----------
+  const panel = document.getElementById("panel");
+  const ICON_PLAY = '<svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M5 3.2v11.6c0 .5.6.8 1 .5l9-5.8c.4-.3.4-.8 0-1L6 2.7c-.4-.3-1 0-1 .5z" fill="currentColor"/></svg>';
+  const ICON_PAUSE = '<svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><rect x="4" y="3" width="3.6" height="12" rx="1" fill="currentColor"/><rect x="10.4" y="3" width="3.6" height="12" rx="1" fill="currentColor"/></svg>';
+  const ICON_CLOSE = '<svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 3.5l9 9m0-9l-9 9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>';
+
+  function showPanel(html) {
+    panel.innerHTML = html;
+    panel.hidden = false;
+    const close = panel.querySelector(".close");
+    if (close) close.addEventListener("click", closePanel);
+  }
+  function closePanel() {
+    if (recorder.busy()) recorder.cancel();
+    if (unwire) { unwire(); unwire = null; }
+    stopPlayback();
+    selectedId = null;
+    panel.hidden = true;
+    panel.innerHTML = "";
+    controlsEl.hidden = false;
+    layout();
+  }
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !panel.hidden) closePanel(); });
+
+  // ---------- listening ----------
+  const audio = new Audio();
+  audio.preload = "none";
+  let playing = null;
+  let playingSrc = "";
+
+  // Safari only lets an audio element play without a tap once it has played
+  // from a tap, so the first tap plays a moment of silence.
+  const SILENCE = "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=";
+  let unlocked = false;
+  function unlockAudio() {
+    if (unlocked) return;
+    unlocked = true;
+    try { audio.src = SILENCE; const pr = audio.play(); if (pr) pr.catch(() => {}); } catch {}
+  }
+
+  // recordings are fetched whole and played from memory
+  const audioCache = new Map();
+  async function audioUrl(p) {
+    if (audioCache.has(p.id)) return audioCache.get(p.id);
+    const res = await fetch(p.url);
+    if (!res.ok) throw new Error(String(res.status));
+    const url = URL.createObjectURL(await res.blob());
+    audioCache.set(p.id, url);
+    if (audioCache.size > 40) {
+      const [k, v] = audioCache.entries().next().value;
+      URL.revokeObjectURL(v);
+      audioCache.delete(k);
+    }
+    return url;
+  }
+
+  function stopPlayback() {
+    audio.pause();
+    playing = null;
+  }
+
+  function wirePlayer(root, getDuration) {
+    const btn = root.querySelector(".play");
+    const fill = root.querySelector(".bar > span");
+    const time = root.querySelector(".time");
+    const sync = () => {
+      const d = getDuration();
+      const c = audio.currentTime || 0;
+      fill.style.width = d ? Math.min(100, (c / d) * 100) + "%" : "0%";
+      time.textContent = `${clock(c)} / ${clock(d)}`;
+      const isPlaying = !audio.paused && !audio.ended;
+      btn.innerHTML = isPlaying ? ICON_PAUSE : ICON_PLAY;
+      btn.setAttribute("aria-label", isPlaying ? "Pause" : "Play");
+    };
+    btn.addEventListener("click", () => {
+      if (audio.paused || audio.ended) audio.play().catch(() => {}); else audio.pause();
+    });
+    ["timeupdate", "play", "pause", "ended", "loadedmetadata"].forEach((ev) => audio.addEventListener(ev, sync));
+    sync();
+    return () => ["timeupdate", "play", "pause", "ended", "loadedmetadata"].forEach((ev) => audio.removeEventListener(ev, sync));
+  }
+
+  let unwire = null;
+  function openPrayer(p, autoplay) {
+    if (recorder.busy()) return;
+    if (unwire) { unwire(); unwire = null; }
+    unlockAudio();
+    stopPlayback();
+    selectedId = p.id;
+    playing = p;
+    const yours = mine.has(p.id);
+    showPanel(`
+      <button class="close" aria-label="Close">${ICON_CLOSE}</button>
+      <p class="when">${yours ? "Your prayer, left" : "Left"} ${ago(p.t)}</p>
+      <div class="player">
+        <button class="play" aria-label="Play">${ICON_PLAY}</button>
+        <div class="bar" aria-hidden="true"><span></span></div>
+        <span class="time">0:00 / ${clock(p.dur)}</span>
+      </div>
+      <div class="actions">
+        <button class="link" data-act="another">Listen to another</button>
+        ${ADMIN ? '<button class="link push" data-act="remove">Remove this prayer</button>' : ""}
+      </div>`);
+    playingSrc = "";
+    unwire = wirePlayer(panel, () => (playingSrc && isFinite(audio.duration) && audio.duration > 0 ? audio.duration : p.dur));
+    const playBtn = panel.querySelector(".play");
+    playBtn.disabled = true;
+    panel.querySelector('[data-act="another"]').addEventListener("click", () => playRandom(p.id));
+    const rm = panel.querySelector('[data-act="remove"]');
+    if (rm) rm.addEventListener("click", () => removePrayer(p));
+    audioUrl(p).then((url) => {
+      if (playing !== p) return;
+      playingSrc = url;
+      audio.src = url;
+      playBtn.disabled = false;
+      if (autoplay) audio.play().catch(() => {});
+    }).catch(() => { if (playing === p) playbackFailed(p); });
+  }
+  function playbackFailed(p) {
+    const when = panel.querySelector(".when");
+    if (!when) return;
+    when.innerHTML = 'This prayer couldn\u2019t be played. <button class="link" data-act="retry">Try again</button>';
+    when.querySelector('[data-act="retry"]').addEventListener("click", () => {
+      const cached = audioCache.get(p.id);
+      if (cached) { URL.revokeObjectURL(cached); audioCache.delete(p.id); }
+      openPrayer(p, true);
+    });
+  }
+  audio.addEventListener("error", () => {
+    if (playing && playingSrc && audio.getAttribute("src") === playingSrc) playbackFailed(playing);
+  });
+
+  function playRandom(exceptId) {
+    const pool = prayers.filter((p) => p.id !== exceptId);
+    const list = pool.length ? pool : prayers;
+    if (!list.length) return;
+    openPrayer(list[Math.floor(Math.random() * list.length)], true);
+  }
+  randomBtn.addEventListener("click", () => playRandom(selectedId));
+  mineBtn.addEventListener("click", () => {
+    const own = prayers.filter((p) => mine.has(p.id)).sort((a, b) => b.t - a.t);
+    if (!own.length) return;
+    const i = own.findIndex((p) => p.id === selectedId);
+    openPrayer(own[(i + 1) % own.length], true);
+  });
+
+  // ---------- admin removal ----------
+  async function removePrayer(p) {
+    let key = "";
+    try { key = sessionStorage.getItem("prayer-tree:admin") || ""; } catch {}
+    if (!key) key = prompt("Admin key") || "";
+    if (!key) return;
+    const res = await fetch(`/api/prayers?id=${encodeURIComponent(p.id)}`, { method: "DELETE", headers: { "x-admin-key": key } });
+    if (res.ok) {
+      try { sessionStorage.setItem("prayer-tree:admin", key); } catch {}
+      prayers = prayers.filter((q) => q.id !== p.id);
+      closePanel();
+      place();
+      toast("Removed from the tree.");
+    } else {
+      try { sessionStorage.removeItem("prayer-tree:admin"); } catch {}
+      const body = await res.json().catch(() => ({}));
+      toast(body.error || "That prayer couldn’t be removed.");
+    }
+  }
+
+  // ---------- recording ----------
+  const recorder = (() => {
+    let state = "idle";
+    let stream = null, mr = null, chunks = [], startedAt = 0, seconds = 0, blob = null, mime = "";
+    let ac = null, analyser = null, levels = [], tickRaf = 0, stopTimer = 0, previewUrl = "";
+
+    const TYPES = ["audio/mp4;codecs=mp4a.40.2", "audio/webm;codecs=opus", "audio/mp4", "audio/webm", "audio/ogg;codecs=opus"];
+    const supported = () => typeof MediaRecorder !== "undefined" && navigator.mediaDevices && navigator.mediaDevices.getUserMedia;
+
+    function release() {
+      cancelAnimationFrame(tickRaf);
+      clearTimeout(stopTimer);
+      if (stream) stream.getTracks().forEach((t) => t.stop());
+      stream = null;
+      if (ac) ac.close().catch(() => {});
+      ac = null; analyser = null;
+    }
+
+    function intro() {
+      state = "ready";
+      if (unwire) { unwire(); unwire = null; }
+      stopPlayback();
+      selectedId = null;
+      controlsEl.hidden = true;
+      if (!supported()) {
+        return showPanel(`
+          <button class="close" aria-label="Close">${ICON_CLOSE}</button>
+          <h2>Leave a prayer</h2>
+          <p class="error-text">This browser can’t record audio. Open the tree in Chrome, Safari, or Firefox to leave a prayer.</p>`);
+      }
+      showPanel(`
+        <button class="close" aria-label="Close">${ICON_CLOSE}</button>
+        <h2>Leave a prayer</h2>
+        <p class="note">You have up to 30 seconds. No name is attached, but once it hangs on the tree, anyone who visits can listen.</p>
+        <div class="actions">
+          <button class="btn primary" data-act="start"><span class="rec-dot" aria-hidden="true"></span>Start recording</button>
+          <button class="link" data-act="cancel">Cancel</button>
+        </div>`);
+      panel.querySelector('[data-act="start"]').addEventListener("click", start);
+      panel.querySelector('[data-act="cancel"]').addEventListener("click", closePanel);
+      layout();
+    }
+
+    async function start() {
+      state = "asking";
+      const btn = panel.querySelector('[data-act="start"]');
+      if (btn) { btn.disabled = true; btn.lastChild.textContent = "Waiting for the microphone…"; }
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+      } catch (err) {
+        state = "ready";
+        const blocked = err && (err.name === "NotAllowedError" || err.name === "SecurityError");
+        const noMic = err && (err.name === "NotFoundError" || err.name === "OverconstrainedError");
+        return fail(blocked
+          ? "Microphone access is blocked. Allow the microphone for this site in your browser settings, then try again."
+          : noMic ? "No microphone was found. Connect one, then try again."
+          : "The microphone couldn’t start. Check that no other app is using it, then try again.");
+      }
+      mime = TYPES.find((t) => { try { return MediaRecorder.isTypeSupported(t); } catch { return false; } }) || "";
+      try {
+        mr = new MediaRecorder(stream, mime ? { mimeType: mime, audioBitsPerSecond: 64000 } : { audioBitsPerSecond: 64000 });
+      } catch {
+        mr = new MediaRecorder(stream);
+      }
+      chunks = [];
+      mr.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
+      mr.onstop = finished;
+      try {
+        ac = new (window.AudioContext || window.webkitAudioContext)();
+        const src = ac.createMediaStreamSource(stream);
+        analyser = ac.createAnalyser();
+        analyser.fftSize = 512;
+        src.connect(analyser);
+      } catch { analyser = null; }
+      levels = [];
+      mr.start(250);
+      startedAt = performance.now();
+      state = "recording";
+      showPanel(`
+        <h2><span class="rec-dot" aria-hidden="true"></span>Recording</h2>
+        <div class="timer"><span class="big" data-el="clock">0:00</span><span class="of">of 0:30</span></div>
+        <div class="meter" data-el="meter" aria-hidden="true"></div>
+        <div class="actions">
+          <button class="btn primary" data-act="stop">Stop</button>
+          <button class="link" data-act="cancel">Cancel</button>
+        </div>`);
+      panel.querySelector('[data-act="stop"]').addEventListener("click", stop);
+      panel.querySelector('[data-act="cancel"]').addEventListener("click", closePanel);
+      stopTimer = setTimeout(stop, MAX_SECONDS * 1000);
+      tick();
+      layout();
+    }
+
+    const RAMP = " .:-=+*%@";
+    const buf = new Uint8Array(512);
+    function tick() {
+      if (state !== "recording") return;
+      const el = (n) => panel.querySelector(`[data-el="${n}"]`);
+      const s = (performance.now() - startedAt) / 1000;
+      const clk = el("clock");
+      if (clk) clk.textContent = clock(Math.min(s, MAX_SECONDS));
+      if (analyser) {
+        analyser.getByteTimeDomainData(buf);
+        let sum = 0;
+        for (let i = 0; i < buf.length; i++) { const v = (buf[i] - 128) / 128; sum += v * v; }
+        const rms = Math.sqrt(sum / buf.length);
+        levels.push(Math.min(1, rms * 4.5));
+        const meter = el("meter");
+        if (meter) {
+          const cols = Math.max(12, Math.floor(meter.clientWidth / 9.3));
+          levels = levels.slice(-cols);
+          meter.textContent = levels.map((l) => RAMP[Math.min(RAMP.length - 1, Math.round(l * (RAMP.length - 1)))]).join("");
+        }
+      }
+      tickRaf = requestAnimationFrame(tick);
+    }
+
+    function stop() {
+      if (state !== "recording" || !mr) return;
+      seconds = Math.min(MAX_SECONDS, (performance.now() - startedAt) / 1000);
+      state = "stopping";
+      clearTimeout(stopTimer);
+      try { mr.stop(); } catch { finished(); }
+    }
+
+    function finished() {
+      release();
+      if (state === "cancelled") return;
+      const type = (mr && mr.mimeType) || mime || (chunks[0] && chunks[0].type) || "audio/webm";
+      blob = new Blob(chunks, { type });
+      if (seconds < MIN_SECONDS || blob.size < 800) {
+        state = "ready";
+        return fail("That recording was too short. Press Start recording and speak for at least a second.");
+      }
+      review();
+    }
+
+    function review() {
+      state = "review";
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+      previewUrl = URL.createObjectURL(blob);
+      showPanel(`
+        <button class="close" aria-label="Close">${ICON_CLOSE}</button>
+        <h2>Listen back</h2>
+        <div class="player">
+          <button class="play" aria-label="Play">${ICON_PLAY}</button>
+          <div class="bar" aria-hidden="true"><span></span></div>
+          <span class="time">0:00 / ${clock(seconds)}</span>
+        </div>
+        <div class="actions">
+          <button class="btn primary" data-act="send"><span class="knot" aria-hidden="true">§</span>Hang it on the tree</button>
+          <button class="link" data-act="again">Record again</button>
+        </div>`);
+      audio.src = previewUrl;
+      unwire = wirePlayer(panel, () => seconds);
+      panel.querySelector('[data-act="send"]').addEventListener("click", send);
+      panel.querySelector('[data-act="again"]').addEventListener("click", () => { if (unwire) { unwire(); unwire = null; } stopPlayback(); intro(); start(); });
+      layout();
+    }
+
+    async function send() {
+      state = "sending";
+      if (unwire) { unwire(); unwire = null; }
+      stopPlayback();
+      const btn = panel.querySelector('[data-act="send"]');
+      const again = panel.querySelector('[data-act="again"]');
+      if (btn) { btn.disabled = true; btn.lastChild.textContent = "Hanging your prayer…"; }
+      if (again) again.disabled = true;
+      let res, body = {};
+      try {
+        res = await fetch("/api/prayers", {
+          method: "POST",
+          headers: { "content-type": blob.type || "audio/webm", "x-duration": seconds.toFixed(1) },
+          body: blob,
+        });
+        body = await res.json().catch(() => ({}));
+      } catch {
+        res = null;
+      }
+      if (!res || !res.ok || !body.prayer) {
+        state = "review";
+        const msg = body.error || "Your prayer couldn’t be sent. Check your connection and try again.";
+        review();
+        const p = document.createElement("p");
+        p.className = "error-text";
+        p.textContent = msg;
+        panel.insertBefore(p, panel.querySelector(".actions"));
+        return;
+      }
+      const p = body.prayer;
+      mine.add(p.id);
+      store.set("prayer-tree:mine", [...mine]);
+      if (!prayers.some((q) => q.id === p.id)) prayers.push(p);
+      state = "idle";
+      if (previewUrl) { URL.revokeObjectURL(previewUrl); previewUrl = ""; }
+      blob = null;
+      panel.hidden = true;
+      panel.innerHTML = "";
+      controlsEl.hidden = false;
+      place();
+      layout();
+      arrival = reduceMotion.matches ? null : { id: p.id, start: performance.now() / 1000 };
+      selectedId = p.id;
+      setTimeout(() => { if (selectedId === p.id && panel.hidden) selectedId = null; }, 6000);
+      toast("Your prayer is hanging on the tree.");
+    }
+
+    function fail(msg) {
+      release();
+      showPanel(`
+        <button class="close" aria-label="Close">${ICON_CLOSE}</button>
+        <h2>Leave a prayer</h2>
+        <p class="error-text">${msg}</p>
+        <div class="actions">
+          <button class="btn primary" data-act="start"><span class="rec-dot" aria-hidden="true"></span>Try again</button>
+          <button class="link" data-act="cancel">Cancel</button>
+        </div>`);
+      panel.querySelector('[data-act="start"]').addEventListener("click", start);
+      panel.querySelector('[data-act="cancel"]').addEventListener("click", closePanel);
+      layout();
+    }
+
+    function cancel() {
+      const wasRecording = state === "recording" || state === "stopping";
+      state = "cancelled";
+      if (wasRecording && mr) { try { mr.stop(); } catch {} }
+      release();
+      if (previewUrl) { URL.revokeObjectURL(previewUrl); previewUrl = ""; }
+      blob = null;
+      state = "idle";
+    }
+
+    return {
+      intro, cancel,
+      busy: () => state !== "idle",
+    };
+  })();
+
+  document.getElementById("leave").addEventListener("click", () => recorder.intro());
+
+  // ---------- loading ----------
+  async function load() {
+    try {
+      const res = await fetch("/api/prayers", { headers: { accept: "application/json" } });
+      if (!res.ok) throw new Error(String(res.status));
+      const body = await res.json();
+      const incoming = Array.isArray(body.prayers) ? body.prayers : [];
+      // keep anything we just added that the cached list hasn't caught up with
+      const ids = new Set(incoming.map((p) => p.id));
+      const pending = prayers.filter((p) => !ids.has(p.id) && mine.has(p.id) && Date.now() - p.t < 180000);
+      const before = prayers.map((p) => p.id).join();
+      prayers = incoming.concat(pending);
+      if (prayers.map((p) => p.id).join() !== before) place();
+      else updateCount();
+    } catch {
+      if (!prayers.length) countEl.textContent = "The prayers couldn’t load. Refresh the page to try again.";
+    }
+  }
+
+  // ---------- start ----------
+  async function boot() {
+    try {
+      await Promise.race([
+        Promise.all([document.fonts.load(FONT(16)), document.fonts.load(FONT(16, 600))]),
+        new Promise((r) => setTimeout(r, 2500)),
+      ]);
+    } catch {}
+    measure();
+    layout();
+    rebuildAll();
+    requestAnimationFrame(frame);
+    await load();
+    setInterval(() => { if (document.visibilityState === "visible") load(); }, POLL_MS);
+    document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") load(); });
+  }
+  window.addEventListener("resize", layout);
+  boot();
+})();
+</script>
+</body>
+</html>
