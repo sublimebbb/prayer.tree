@@ -125,6 +125,15 @@
   }
   #dock > * { pointer-events: auto; }
 
+  .stats {
+    margin: 0;
+    min-height: 1.4em;
+    color: var(--ink-soft);
+    font-size: 0.9rem;
+    font-style: italic;
+    text-align: center;
+  }
+  #controls[hidden] + .stats { display: none; }
   .controls {
     display: flex;
     flex-wrap: wrap;
@@ -360,6 +369,7 @@
     <button class="btn" id="random" disabled>Listen to a prayer</button>
     <button class="link" id="mine" hidden>Find yours</button>
   </div>
+  <p class="stats" id="stats"></p>
 </div>
 
 <nav class="sr-only" aria-label="Prayers on the tree">
@@ -394,6 +404,14 @@
     },
   };
   const mine = new Set(store.get("prayer-tree:mine", []));
+  const gone = new Set(); // removed here, so a slow cached list can't bring them back
+
+  // a random id per device, so people sharing one Wi-Fi each get their own allowance
+  let deviceId = store.get("prayer-tree:device", "");
+  if (!/^[A-Za-z0-9_-]{8,64}$/.test(deviceId)) {
+    deviceId = Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, "0")).join("");
+    store.set("prayer-tree:device", deviceId);
+  }
 
   // ---------- the tree ----------
   const T = PrayerTree.build();
@@ -441,7 +459,7 @@
     canvas.width = Math.round(vw * dpr);
     canvas.height = Math.round(vh * dpr);
     const hb = header.getBoundingClientRect();
-    const bottom = vw < 420 ? 128 : 86; // room for the buttons; fixed so the tree never jumps
+    const bottom = vw < 420 ? 156 : 112; // room for the buttons and counts; fixed so the tree never jumps
     const fit = (top) => {
       const availW = vw - 24, availH = vh - top - bottom;
       const size = Math.max(4, Math.min(availW / (W * cwRatio), availH / (H * ROW_RATIO), 24));
@@ -682,8 +700,12 @@
   const countEl = document.getElementById("count");
   const randomBtn = document.getElementById("random");
   const mineBtn = document.getElementById("mine");
+  const statsEl = document.getElementById("stats");
+  let visitors = 0;
+  const plural = (n, word) => `${n.toLocaleString()} ${word}${n === 1 ? "" : "s"}`;
   function updateCount() {
     const n = prayers.length;
+    statsEl.textContent = visitors ? `${plural(n, "prayer")} · ${plural(visitors, "visitor")}` : plural(n, "prayer");
     countEl.textContent = n === 0 ? "No prayers yet. Leave the first one." : n === 1 ? "1 prayer hangs here." : `${n.toLocaleString()} prayers hang here.`;
     randomBtn.disabled = n === 0;
     mineBtn.hidden = !prayers.some((p) => mine.has(p.id));
@@ -881,8 +903,10 @@
     if (!key) key = prompt("Admin key") || "";
     if (!key) return;
     const res = await fetch(`/api/prayers?id=${encodeURIComponent(p.id)}`, { method: "DELETE", headers: { "x-admin-key": key } });
-    if (res.ok) {
+    // 404 means it was already removed and only a stale list still showed it
+    if (res.ok || res.status === 404) {
       try { sessionStorage.setItem("prayer-tree:admin", key); } catch {}
+      gone.add(p.id);
       prayers = prayers.filter((q) => q.id !== p.id);
       closePanel();
       place();
@@ -1076,6 +1100,7 @@
           headers: {
             "content-type": blob.type || "audio/webm",
             "x-duration": seconds.toFixed(1),
+            "x-device": deviceId,
             // headers must be ASCII, so the note travels percent-encoded
             "x-note": encodeURIComponent(note.trim()),
           },
@@ -1154,7 +1179,8 @@
       const res = await fetch("/api/prayers", { headers: { accept: "application/json" } });
       if (!res.ok) throw new Error(String(res.status));
       const body = await res.json();
-      const incoming = Array.isArray(body.prayers) ? body.prayers : [];
+      if (Number.isFinite(body.visitors)) visitors = Math.max(visitors, body.visitors);
+      const incoming = (Array.isArray(body.prayers) ? body.prayers : []).filter((p) => !gone.has(p.id));
       // keep anything we just added that the cached list hasn't caught up with
       const ids = new Set(incoming.map((p) => p.id));
       const pending = prayers.filter((p) => !ids.has(p.id) && mine.has(p.id) && Date.now() - p.t < 180000);
@@ -1188,6 +1214,18 @@
     panel.querySelector('[data-act="ok"]').addEventListener("click", closePanel);
   }
 
+  // count this device once, the first time it visits
+  async function countVisit() {
+    if (store.get("prayer-tree:counted", false)) return;
+    try {
+      const res = await fetch("/api/visit", { method: "POST", headers: { "x-device": deviceId } });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) return;
+      store.set("prayer-tree:counted", true);
+      if (body.visitors) { visitors = Math.max(visitors, body.visitors); updateCount(); }
+    } catch {}
+  }
+
   // ---------- start ----------
   async function boot() {
     try {
@@ -1202,6 +1240,7 @@
     requestAnimationFrame(frame);
     showHowTo();
     await load();
+    countVisit();
     setInterval(() => { if (document.visibilityState === "visible") load(); }, POLL_MS);
     document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") load(); });
   }

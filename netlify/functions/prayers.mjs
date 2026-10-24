@@ -79,24 +79,38 @@ function readNote(raw) {
   return [...s].slice(0, NOTE_MAX).join("").trim();
 }
 
-// Light per-instance limit so one visitor can't flood the tree.
+// Light per-instance limits so one visitor can't flood the tree. Each device
+// gets its own allowance, since a whole workshop on one Wi-Fi shares an IP;
+// the looser per-IP limit is a backstop for anyone faking device ids.
+const PER_DEVICE = 6;
+const PER_IP = 150;
+const WINDOW_MS = 10 * 60 * 1000;
 const recent = new Map();
-function limited(ip) {
+function limited(key, max) {
   const now = Date.now();
-  const list = (recent.get(ip) || []).filter((t) => now - t < 10 * 60 * 1000);
-  if (list.length >= 6) { recent.set(ip, list); return true; }
+  const list = (recent.get(key) || []).filter((t) => now - t < WINDOW_MS);
+  if (list.length >= max) { recent.set(key, list); return true; }
   list.push(now);
-  recent.set(ip, list);
+  recent.set(key, list);
   if (recent.size > 5000) recent.clear();
   return false;
 }
 
+// Tag on the cached list, so a removal can clear it from the CDN at once.
+const LIST_TAG = "prayer-list";
+
 async function list() {
   try {
-    const { prayers } = await readIndex(false);
-    return json({ prayers }, 200, {
+    // strong read, so a refetch right after a removal never gets the old list
+    const [{ prayers }, stats] = await Promise.all([
+      readIndex(true),
+      store().get("stats.json", { type: "json" }).catch(() => null),
+    ]);
+    const visitors = (stats && Number(stats.visitors)) || 0;
+    return json({ prayers, visitors }, 200, {
       "cache-control": "public, max-age=0, must-revalidate",
       "netlify-cdn-cache-control": "public, durable, s-maxage=10, stale-while-revalidate=50",
+      "netlify-cache-tag": LIST_TAG,
     });
   } catch (err) {
     console.error("read failed", err);
@@ -106,7 +120,9 @@ async function list() {
 
 async function add(req, context) {
   const ip = (context && context.ip) || (req.headers.get("x-nf-client-connection-ip") || "unknown");
-  if (limited(ip)) {
+  const device = req.headers.get("x-device") || "";
+  const deviceKey = /^[A-Za-z0-9_-]{8,64}$/.test(device) ? `device:${device}` : `ip:${ip}`;
+  if (limited(deviceKey, PER_DEVICE) || limited(`net:${ip}`, PER_IP)) {
     return json({ error: "You've left several prayers in a short time. Wait a few minutes, then try again." }, 429);
   }
 
@@ -178,10 +194,12 @@ async function remove(req) {
     console.error("remove failed", err);
     return json({ error: "The prayer couldn't be removed. Try again." }, 503);
   }
-  if (!removed) return json({ error: "That prayer is no longer on the tree." }, 404);
+  // drop the cached list and recording from the CDN too, not just from the tree;
+  // also when it was already gone, since a stale cached list is what showed it
+  const purge = purgeCache({ tags: [LIST_TAG, `prayer-${id}`] }).catch((err) => console.warn("cache purge failed", err));
+  if (!removed) { await purge; return json({ error: "That prayer is no longer on the tree." }, 404); }
   await store().delete(`audio/${id}`).catch(() => {});
-  // drop the recording from the CDN too, not just from the tree
-  await purgeCache({ tags: [`prayer-${id}`] }).catch((err) => console.warn("cache purge failed", err));
+  await purge;
   return json({ ok: true });
 }
 
