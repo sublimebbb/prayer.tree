@@ -3,11 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>The prayer tree</title>
+<title>prayer tree</title>
 <meta name="description" content="Leave a spoken prayer of up to 30 seconds on a shared tree, and listen to the prayers others have left.">
-<meta property="og:title" content="The prayer tree">
+<meta property="og:title" content="prayer tree">
 <meta property="og:description" content="Leave a spoken prayer on a shared tree, and listen to the prayers others have left.">
-<meta name="theme-color" content="#FBF7EE" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#FFFFFF" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#161C15" media="(prefers-color-scheme: dark)">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ctext x='50%25' y='54%25' dominant-baseline='middle' text-anchor='middle' font-family='monospace' font-size='56' fill='%23B3392C'%3E%C2%A7%3C/text%3E%3C/svg%3E">
 <link rel="preload" href="/fonts/spline-sans-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
@@ -20,8 +20,8 @@
   @font-face { font-family: "Spline Sans Mono"; font-style: normal; font-weight: 600; font-display: block; src: url(/fonts/spline-sans-mono-latin-600-normal.woff2) format("woff2"); }
 
   :root {
-    --mist: #FBF7EE;
-    --card: #FFFDF8;
+    --mist: #FFFFFF;
+    --card: #F5F5F2;
     --leaf-dark: #3F5537;
     --leaf-light: #7E9672;
     --bark: #5E4A3A;
@@ -91,25 +91,23 @@
     line-height: 1.15;
     letter-spacing: -0.01em;
   }
-  .lede {
-    margin: 0.45rem 0 0;
-    color: var(--ink-soft);
-    font-size: 0.98rem;
-    line-height: 1.45;
-  }
-  .count {
-    margin: 0.5rem 0 0;
-    font-style: italic;
-    color: var(--ink-soft);
-    font-size: 0.98rem;
-  }
   .credit {
-    margin: 0.35rem 0 0;
+    margin: 0.3rem 0 0;
     color: var(--ink-soft);
-    font-size: 0.82rem;
+    font-size: 0.98rem;
+    font-style: italic;
   }
-  body.embedded .lede { display: none; }
+  .credit a {
+    pointer-events: auto;
+    color: inherit;
+    text-decoration: underline;
+    text-decoration-color: var(--line);
+    text-underline-offset: 3px;
+  }
+  .credit a:hover { color: var(--ink); text-decoration-color: currentColor; }
   body.embedded h1 { font-size: 1.25rem; }
+  .panel .steps { margin: 0 0 0.9rem; padding-left: 1.3rem; }
+  .panel .steps li { margin: 0 0 0.35rem; padding-left: 0.2rem; }
 
   #dock {
     position: fixed;
@@ -323,7 +321,6 @@
   @media (max-width: 560px) {
     body { font-size: 16px; }
     h1 { font-size: 1.35rem; }
-    .lede { font-size: 0.93rem; }
     .btn { padding: 0.6rem 1rem; }
   }
   @media (prefers-reduced-motion: no-preference) {
@@ -336,10 +333,9 @@
 <canvas id="tree" aria-hidden="true"></canvas>
 
 <header>
-  <h1>The prayer tree</h1>
-  <p class="lede">Speak a prayer of up to 30 seconds and it will hang somewhere on this tree, where anyone who visits can listen.</p>
-  <p class="count" id="count" aria-live="polite">Gathering the prayers…</p>
-  <p class="credit">Built by sublime for Boundary workshops</p>
+  <h1>prayer tree</h1>
+  <p class="credit">by <a href="https://thesublimepractice.com" target="_blank" rel="noopener">sublime</a> for <a href="https://boundaryai.app" target="_blank" rel="noopener">boundary</a> workshops</p>
+  <p class="sr-only" id="count" aria-live="polite">Gathering the prayers…</p>
 </header>
 
 <div id="dock">
@@ -1128,6 +1124,27 @@
     }
   }
 
+  // ---------- how it works ----------
+  function showHowTo() {
+    showPanel(`
+      <button class="close" aria-label="Close">${ICON_CLOSE}</button>
+      <h2>How it works</h2>
+      <ol class="steps">
+        <li>Speak a prayer of up to 30 seconds.</li>
+        <li>Listen back, then hang it on the tree. It appears as a red §, somewhere among the leaves.</li>
+        <li>Tap any § to hear a prayer someone else left.</li>
+      </ol>
+      <p class="note">No name is attached. Anyone who visits can listen.</p>
+      <div class="actions">
+        <button class="btn primary" data-act="start"><span class="knot" aria-hidden="true">§</span>Leave a prayer</button>
+        <button class="link" data-act="ok">Not now</button>
+      </div>`);
+    controlsEl.hidden = true;
+    layout();
+    panel.querySelector('[data-act="start"]').addEventListener("click", () => recorder.intro());
+    panel.querySelector('[data-act="ok"]').addEventListener("click", closePanel);
+  }
+
   // ---------- start ----------
   async function boot() {
     try {
@@ -1140,6 +1157,7 @@
     layout();
     rebuildAll();
     requestAnimationFrame(frame);
+    showHowTo();
     await load();
     setInterval(() => { if (document.visibilityState === "visible") load(); }, POLL_MS);
     document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") load(); });

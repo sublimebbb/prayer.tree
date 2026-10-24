@@ -43,7 +43,7 @@ Open the site with `?admin` on the end (for example `https://your-site.netlify.a
         title="The prayer tree"></iframe>
 ```
 
-`allow="microphone"` is required, or visitors on the host page won't be able to record. `?embed` hides the intro sentence to save space.
+`allow="microphone"` is required, or visitors on the host page won't be able to record. `?embed` makes the title smaller to save space.
 
 ## Limits worth knowing
 
