@@ -9,7 +9,7 @@
 <meta property="og:description" content="Leave a spoken prayer on a shared tree, and listen to the prayers others have left.">
 <meta name="theme-color" content="#FFFFFF" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#161C15" media="(prefers-color-scheme: dark)">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ctext x='50%25' y='54%25' dominant-baseline='middle' text-anchor='middle' font-family='monospace' font-size='56' fill='%23B3392C'%3E%C2%A7%3C/text%3E%3C/svg%3E">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="preload" href="/fonts/spline-sans-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
 <style>
   /* Spectral and Spline Sans Mono, both SIL Open Font License 1.1 */
@@ -18,6 +18,8 @@
   @font-face { font-family: "Spectral"; font-style: italic; font-weight: 400; font-display: swap; src: url(/fonts/spectral-latin-400-italic.woff2) format("woff2"); }
   @font-face { font-family: "Spline Sans Mono"; font-style: normal; font-weight: 400; font-display: block; src: url(/fonts/spline-sans-mono-latin-400-normal.woff2) format("woff2"); }
   @font-face { font-family: "Spline Sans Mono"; font-style: normal; font-weight: 600; font-display: block; src: url(/fonts/spline-sans-mono-latin-600-normal.woff2) format("woff2"); }
+  /* the spiral \uAA5C only, from Noto Sans Cham (SIL Open Font License 1.1) */
+  @font-face { font-family: "Prayer Spiral"; font-style: normal; font-weight: 400; font-display: block; src: url(/fonts/noto-sans-cham-cham-400-normal.woff2) format("woff2"); unicode-range: U+AA5C; }
 
   :root {
     --mist: #FFFFFF;
@@ -33,8 +35,8 @@
     --ink-soft: #566151;
     --line: rgba(30, 37, 28, 0.15);
     --shadow: 0 18px 40px -26px rgba(22, 34, 20, 0.55);
-    --serif: "Spectral", Georgia, "Times New Roman", serif;
-    --mono: "Spline Sans Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+    --serif: "Spectral", "Prayer Spiral", Georgia, "Times New Roman", serif;
+    --mono: "Spline Sans Mono", "Prayer Spiral", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
     color-scheme: light dark;
   }
   @media (prefers-color-scheme: dark) {
@@ -148,25 +150,22 @@
     min-height: 44px;
     padding: 0.62rem 1.15rem;
     border-radius: 999px;
-    border: 1px solid var(--line);
-    background: var(--card);
+    border: 1px solid var(--ink);
+    background: transparent;
+    color: var(--ink);
     font-size: 1rem;
-    font-weight: 500;
+    font-weight: 400;
     line-height: 1;
     white-space: nowrap;
+    transition: background-color 120ms, color 120ms;
   }
-  .btn:hover:not(:disabled) { border-color: var(--ink-soft); }
-  .btn.primary {
-    background: var(--ribbon);
-    border-color: transparent;
-    color: var(--ribbon-ink);
-  }
-  .btn.primary:hover:not(:disabled) { filter: brightness(1.06); border-color: transparent; }
+  .btn:hover:not(:disabled) { background: var(--ink); color: var(--mist); }
   .btn .knot {
     font-family: var(--mono);
-    font-weight: 600;
+    font-weight: 400;
     font-size: 1.05em;
     line-height: 1;
+    color: var(--ribbon);
   }
   .link {
     background: none;
@@ -232,12 +231,14 @@
     width: 44px;
     height: 44px;
     border-radius: 50%;
-    border: 0;
-    background: var(--ribbon);
-    color: var(--ribbon-ink);
+    border: 1px solid var(--ink);
+    background: transparent;
+    color: var(--ink);
     display: grid;
     place-items: center;
+    transition: background-color 120ms, color 120ms;
   }
+  .play:hover:not(:disabled) { background: var(--ink); color: var(--mist); }
   .bar {
     position: relative;
     flex: 1;
@@ -293,7 +294,20 @@
     margin-right: 0.45rem;
     vertical-align: 0.12em;
   }
-  .btn.primary .rec-dot { background: var(--ribbon-ink); }
+  .name-field { display: block; margin: 0 0 1rem; }
+  .name-field span { display: block; margin: 0 0 0.35rem; color: var(--ink-soft); font-size: 0.95rem; }
+  .name-field input {
+    width: 100%;
+    min-height: 44px;
+    padding: 0.55rem 0.9rem;
+    border: 1px solid var(--ink);
+    border-radius: 999px;
+    background: transparent;
+    color: var(--ink);
+    font: inherit;
+  }
+  .name-field input::placeholder { color: var(--ink-soft); opacity: 0.7; }
+  .panel .prayer-name { margin: 0 2rem 0.2rem 0; font-size: 1.2rem; font-weight: 500; line-height: 1.25; overflow-wrap: anywhere; }
   .error-text { color: var(--ribbon); }
 
   .toast {
@@ -342,7 +356,7 @@
   <div class="toast" id="toast" role="status" hidden></div>
   <section class="panel" id="panel" hidden aria-live="polite"></section>
   <div class="controls" id="controls">
-    <button class="btn primary" id="leave"><span class="knot" aria-hidden="true">§</span>Leave a prayer</button>
+    <button class="btn primary" id="leave"><span class="knot" aria-hidden="true">꩜</span>Leave a prayer</button>
     <button class="btn" id="random" disabled>Listen to a prayer</button>
     <button class="link" id="mine" hidden>Find yours</button>
   </div>
@@ -360,6 +374,7 @@
   "use strict";
 
   const MAX_SECONDS = 30;
+  const NOTE_MAX = 15;
   const MIN_SECONDS = 1;
   const POLL_MS = 45000;
   const params = new URLSearchParams(location.search);
@@ -657,6 +672,7 @@
     if (d < 14) return `${d} days ago`;
     return "on " + new Date(ts).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
   }
+  const esc = (s) => String(s).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
   const clock = (sec) => {
     sec = Math.max(0, Math.floor(sec || 0));
     return `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}`;
@@ -679,7 +695,7 @@
     for (const p of sorted) {
       const li = document.createElement("li");
       const b = document.createElement("button");
-      b.textContent = `${mine.has(p.id) ? "Your prayer" : "A prayer"}, left ${ago(p.t)}, ${Math.round(p.dur || 0)} seconds`;
+      b.textContent = `${mine.has(p.id) ? "Your prayer" : "A prayer"}${p.note ? `, ${p.note}` : ""}, left ${ago(p.t)}, ${Math.round(p.dur || 0)} seconds`;
       b.addEventListener("focus", () => { focusId = p.id; });
       b.addEventListener("blur", () => { if (focusId === p.id) focusId = null; });
       b.addEventListener("click", () => openPrayer(p, true));
@@ -792,6 +808,7 @@
     const yours = mine.has(p.id);
     showPanel(`
       <button class="close" aria-label="Close">${ICON_CLOSE}</button>
+      ${p.note ? `<p class="prayer-name">${esc(p.note)}</p>` : ""}
       <p class="when">${yours ? "Your prayer, left" : "Left"} ${ago(p.t)}</p>
       <div class="player">
         <button class="play" aria-label="Play">${ICON_PLAY}</button>
@@ -831,11 +848,22 @@
     if (playing && playingSrc && audio.getAttribute("src") === playingSrc) playbackFailed(playing);
   });
 
+  // shuffled order, so every prayer is heard once before any repeats
+  let bag = [];
   function playRandom(exceptId) {
-    const pool = prayers.filter((p) => p.id !== exceptId);
-    const list = pool.length ? pool : prayers;
-    if (!list.length) return;
-    openPrayer(list[Math.floor(Math.random() * list.length)], true);
+    if (!prayers.length) return;
+    const ids = new Set(prayers.map((p) => p.id));
+    bag = bag.filter((id) => ids.has(id) && id !== exceptId);
+    if (!bag.length) {
+      bag = prayers.map((p) => p.id).filter((id) => id !== exceptId);
+      if (!bag.length) bag = [prayers[0].id];
+      for (let i = bag.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [bag[i], bag[j]] = [bag[j], bag[i]];
+      }
+    }
+    const id = bag.pop();
+    openPrayer(prayers.find((p) => p.id === id), true);
   }
   randomBtn.addEventListener("click", () => playRandom(selectedId));
   mineBtn.addEventListener("click", () => {
@@ -868,7 +896,7 @@
   // ---------- recording ----------
   const recorder = (() => {
     let state = "idle";
-    let stream = null, mr = null, chunks = [], startedAt = 0, seconds = 0, blob = null, mime = "";
+    let stream = null, mr = null, chunks = [], startedAt = 0, seconds = 0, blob = null, mime = "", note = "";
     let ac = null, analyser = null, levels = [], tickRaf = 0, stopTimer = 0, previewUrl = "";
 
     const TYPES = ["audio/mp4;codecs=mp4a.40.2", "audio/webm;codecs=opus", "audio/mp4", "audio/webm", "audio/ogg;codecs=opus"];
@@ -1014,10 +1042,17 @@
           <div class="bar" aria-hidden="true"><span></span></div>
           <span class="time">0:00 / ${clock(seconds)}</span>
         </div>
+        <label class="name-field">
+          <span>Add a name or note (optional)</span>
+          <input type="text" maxlength="${NOTE_MAX}" autocomplete="off" enterkeyhint="done" placeholder="for grandma" data-el="note">
+        </label>
         <div class="actions">
           <button class="btn primary" data-act="send"><span class="knot" aria-hidden="true">§</span>Hang it on the tree</button>
           <button class="link" data-act="again">Record again</button>
         </div>`);
+      const noteInput = panel.querySelector('[data-el="note"]');
+      noteInput.value = note;
+      noteInput.addEventListener("input", () => { note = noteInput.value; });
       audio.src = previewUrl;
       unwire = wirePlayer(panel, () => seconds);
       panel.querySelector('[data-act="send"]').addEventListener("click", send);
@@ -1037,7 +1072,12 @@
       try {
         res = await fetch("/api/prayers", {
           method: "POST",
-          headers: { "content-type": blob.type || "audio/webm", "x-duration": seconds.toFixed(1) },
+          headers: {
+            "content-type": blob.type || "audio/webm",
+            "x-duration": seconds.toFixed(1),
+            // headers must be ASCII, so the note travels percent-encoded
+            "x-note": encodeURIComponent(note.trim()),
+          },
           body: blob,
         });
         body = await res.json().catch(() => ({}));
@@ -1061,6 +1101,7 @@
       state = "idle";
       if (previewUrl) { URL.revokeObjectURL(previewUrl); previewUrl = ""; }
       blob = null;
+      note = "";
       panel.hidden = true;
       panel.innerHTML = "";
       controlsEl.hidden = false;
@@ -1094,6 +1135,7 @@
       release();
       if (previewUrl) { URL.revokeObjectURL(previewUrl); previewUrl = ""; }
       blob = null;
+      note = "";
       state = "idle";
     }
 
@@ -1136,7 +1178,7 @@
       </ol>
       <p class="note">No name is attached. Anyone who visits can listen.</p>
       <div class="actions">
-        <button class="btn primary" data-act="start"><span class="knot" aria-hidden="true">§</span>Leave a prayer</button>
+        <button class="btn primary" data-act="start"><span class="knot" aria-hidden="true">꩜</span>Leave a prayer</button>
         <button class="link" data-act="ok">Not now</button>
       </div>`);
     controlsEl.hidden = true;

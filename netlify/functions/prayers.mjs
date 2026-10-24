@@ -8,6 +8,7 @@ const INDEX = "index.json";
 const MAX_SECONDS = 30;
 const MAX_BYTES = 2.5 * 1024 * 1024;
 const MIN_BYTES = 800;
+const NOTE_MAX = 15;
 
 const EXT = {
   "audio/webm": "webm",
@@ -69,6 +70,15 @@ function looksLikeAudio(b, ext) {
   }
 }
 
+// Optional name or note, sent percent-encoded. Plain text, one line, 15 characters.
+function readNote(raw) {
+  if (!raw) return "";
+  let s;
+  try { s = decodeURIComponent(raw); } catch { return ""; }
+  s = s.replace(/\s+/g, " ").replace(/[\p{Cc}\u200B\u200E\u200F\u2028-\u202E\u2066-\u2069\uFEFF]/gu, "").trim();
+  return [...s].slice(0, NOTE_MAX).join("").trim();
+}
+
 // Light per-instance limit so one visitor can't flood the tree.
 const recent = new Map();
 function limited(ip) {
@@ -120,6 +130,8 @@ async function add(req, context) {
   if (!Number.isFinite(dur) || dur <= 0) dur = 0;
   dur = Math.min(MAX_SECONDS, Math.round(dur * 10) / 10);
 
+  const note = readNote(req.headers.get("x-note"));
+
   const id = randomBytes(9).toString("base64url");
   const contentType = CANONICAL[type] || type;
   try {
@@ -133,6 +145,7 @@ async function add(req, context) {
   }
 
   const prayer = { id, url: `/api/audio/${id}`, slot: randomInt(0, 2 ** 31 - 1), dur, t: Date.now() };
+  if (note) prayer.note = note;
   try {
     await updateIndex((all) => { all.push(prayer); return all; });
   } catch (err) {
