@@ -423,7 +423,8 @@
   let dpr = 1, vw = 0, vh = 0, fs = 12, cw = 7, rowH = 13, ox = 0, oy = 0;
   let cwRatio = 0.6;
   const ROW_RATIO = 1.12;
-  const FONT = (size, weight = 400) => `${weight} ${size}px "Spline Sans Mono", ui-monospace, Menlo, Consolas, monospace`;
+  const RIBBON = "\uAA5C"; // the spiral hung on each leaf
+  const FONT = (size, weight = 400) => `${weight} ${size}px "Spline Sans Mono", "Prayer Spiral", ui-monospace, Menlo, Consolas, monospace`;
 
   function measure() {
     ctx.font = FONT(100);
@@ -597,7 +598,7 @@
       ctx.fillStyle = colors.ribbon;
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.fillText("§", pos.x, pos.y + fs * 0.04);
+      ctx.fillText(RIBBON, pos.x, pos.y + fs * 0.04);
       if (p.id === focusId) {
         ctx.strokeStyle = colors.ribbon;
         ctx.lineWidth = 1.5;
@@ -625,7 +626,7 @@
         ctx.fillStyle = colors.ribbon;
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
-        ctx.fillText("§", x, y);
+        ctx.fillText(RIBBON, x, y);
         ctx.textAlign = "left";
         ctx.textBaseline = "top";
       }
@@ -1047,7 +1048,7 @@
           <input type="text" maxlength="${NOTE_MAX}" autocomplete="off" enterkeyhint="done" placeholder="for grandma" data-el="note">
         </label>
         <div class="actions">
-          <button class="btn primary" data-act="send"><span class="knot" aria-hidden="true">§</span>Hang it on the tree</button>
+          <button class="btn primary" data-act="send"><span class="knot" aria-hidden="true">꩜</span>Hang it on the tree</button>
           <button class="link" data-act="again">Record again</button>
         </div>`);
       const noteInput = panel.querySelector('[data-el="note"]');
@@ -1173,8 +1174,8 @@
       <h2>How it works</h2>
       <ol class="steps">
         <li>Speak a prayer of up to 30 seconds.</li>
-        <li>Listen back, then hang it on the tree. It appears as a red §, somewhere among the leaves.</li>
-        <li>Tap any § to hear a prayer someone else left.</li>
+        <li>Listen back, then hang it on the tree. It appears as a red ꩜, somewhere among the leaves.</li>
+        <li>Tap any ꩜ to hear a prayer someone else left.</li>
       </ol>
       <p class="note">No name is attached. Anyone who visits can listen.</p>
       <div class="actions">
@@ -1191,7 +1192,7 @@
   async function boot() {
     try {
       await Promise.race([
-        Promise.all([document.fonts.load(FONT(16)), document.fonts.load(FONT(16, 600))]),
+        Promise.all([document.fonts.load(FONT(16)), document.fonts.load(FONT(16, 600)), document.fonts.load(FONT(16), RIBBON)]),
         new Promise((r) => setTimeout(r, 2500)),
       ]);
     } catch {}
